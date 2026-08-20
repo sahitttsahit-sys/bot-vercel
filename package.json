@@ -1,0 +1,8 @@
+{
+  "name": "bot-qris",
+  "version": "1.0.0",
+  "dependencies": {
+    "telegraf": "4.15.3",
+    "node-fetch": "2.6.7"
+  }
+}
