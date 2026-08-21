@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
       };
 
       try {
-        const response = await fetch('https://api.sandbox.midtrans.com/v2/charge', {
+        const response = await fetch('https://api.midtrans.com/v2/charge', {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
