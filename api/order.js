@@ -1,5 +1,4 @@
 const { Telegraf } = require('telegraf');
-const crypto = require('crypto');
 const fetch = require('node-fetch');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -9,47 +8,43 @@ module.exports = async (req, res) => {
     const update = req.body;
     
     if (update.message && update.message.text === '/beli') {
-      const va = process.env.IPAYMU_VA;
-      const apiKey = process.env.IPAYMU_API_KEY;
+      const serverKey = process.env.MIDTRANS_SERVER_KEY;
+      const base64Auth = Buffer.from(serverKey + ':').toString('base64');
       
+      const orderId = 'TRX-' + Date.now();
       const body = {
-        product: ['Produk Bot'],
-        qty: [1],
-        price: [10000],
-        returnUrl: 'https://' + req.headers.host,
-        notifyUrl: 'https://' + req.headers.host + '/api/callback',
-        referenceId: 'TRX' + Date.now(),
-        paymentMethod: 'qris',
-        channel: 'qris'
+        payment_type: 'qris',
+        transaction_details: {
+          order_id: orderId,
+          gross_amount: 10000
+        }
       };
 
       try {
-        const jsonBody = JSON.stringify(body);
-        const hashBody = crypto.createHash('sha256').update(jsonBody).digest('hex');
-        const stringToSign = `POST:${va}:${hashBody}:${apiKey}`;
-        const signature = crypto.createHmac('sha256', apiKey).update(stringToSign).digest('hex');
-
-        const response = await fetch('https://my.ipaymu.com/api/v2/payment/direct', {
+        const response = await fetch('https://api.sandbox.midtrans.com/v2/charge', {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'va': va,
-            'signature': signature,
-            'timestamp': Math.floor(Date.now() / 1000).toString()
+            'Authorization': 'Basic ' + base64Auth
           },
-          body: jsonBody
+          body: JSON.stringify(body)
         });
 
         const result = await response.json();
         
-        if (result.success && result.data && result.data.qrImage) {
-          await bot.telegram.sendPhoto(update.message.chat.id, result.data.qrImage, {
-            caption: `🛒 *Tagihan QRIS iPaymu*\n\nTotal: Rp 10.000\nSilakan scan untuk membayar.`
-          });
+        if (result.status_code === '201' && result.actions) {
+          // Cari action berjenis generate-qr-code
+          const qrAction = result.actions.find(action => action.name === 'generate-qr-code');
+          if (qrAction) {
+            await bot.telegram.sendPhoto(update.message.chat.id, qrAction.url, {
+              caption: `🛒 *Tagihan QRIS Midtrans*\n\nOrder ID: ${orderId}\nTotal: Rp 10.000\nSilakan scan untuk membayar.`
+            });
+          } else {
+            await bot.telegram.sendMessage(update.message.chat.id, 'Gagal: QR Code tidak ditemukan pada respon Midtrans.');
+          }
         } else {
-          const errMsg = result.message || 'Respon iPaymu tidak valid';
-          await bot.telegram.sendMessage(update.message.chat.id, 'Gagal dari iPaymu: ' + errMsg);
+          await bot.telegram.sendMessage(update.message.chat.id, 'Gagal dari Midtrans: ' + (result.status_message || 'Terjadi kesalahan'));
         }
       } catch (err) {
         await bot.telegram.sendMessage(update.message.chat.id, 'Error sistem: ' + err.message);
