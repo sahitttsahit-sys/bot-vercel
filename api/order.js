@@ -4,9 +4,15 @@ const fetch = require('node-fetch');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 module.exports = async (req, res) => {
+  // Tangani method GET agar tidak error 405
+  if (req.method === 'GET') {
+    return res.status(200).send('Bot is active and running!');
+  }
+
   if (req.method === 'POST') {
     const update = req.body;
     
+    // Cek apakah ini pesan dari Telegram
     if (update.message && update.message.text === '/beli') {
       const serverKey = process.env.MIDTRANS_SERVER_KEY;
       const base64Auth = Buffer.from(serverKey + ':').toString('base64');
@@ -34,7 +40,6 @@ module.exports = async (req, res) => {
         const result = await response.json();
         
         if (result.status_code === '201' && result.actions) {
-          // Cari action berjenis generate-qr-code
           const qrAction = result.actions.find(action => action.name === 'generate-qr-code');
           if (qrAction) {
             await bot.telegram.sendPhoto(update.message.chat.id, qrAction.url, {
@@ -51,5 +56,6 @@ module.exports = async (req, res) => {
       }
     }
   }
-  res.status(200).send('OK');
+  
+  return res.status(200).send('OK');
 };
